@@ -25,6 +25,7 @@ package src
 
 import (
 	"encoding/binary"
+	"unicode/utf8"
 )
 
 const (
@@ -49,40 +50,45 @@ const (
 
 type ClientMessage struct {
 	Buffer      []byte
-	WriteIndex  int
-	ReadIndex   int
-	IsRetryable bool
+	writeIndex  int
+	readIndex   int
+	isRetryable bool
 }
 
 //Todo
-func (msg *ClientMessage) NewClientMessage(buffer []byte, payloadSize int) *ClientMessage {
+func NewClientMessage(buffer []byte, payloadSize int) *ClientMessage {
+	msg := new(ClientMessage)
 	if buffer {
 		msg.Buffer = buffer
-		msg.ReadIndex = 0
+		msg.readIndex = 0
 	}else {
 		buffer = make([]byte, HEADER_SIZE + payloadSize)
 		msg.SetDataOffset(HEADER_SIZE)
-		msg.WriteIndex = 0
+		msg.writeIndex = 0
 		return &ClientMessage{buffer}
 	}
-	msg.IsRetryable = false
+	msg.isRetryable = false
 
 	return msg
 }
+
+/*
+	HEADER ACCESSORS
+ */
 
 func (msg *ClientMessage) GetFrameLength() int32 {
 	return binary.LittleEndian.Uint32(msg.Buffer[FRAME_LENGTH_FIELD_OFFSET:VERSION_FIELD_OFFSET])
 }
 
 func (msg *ClientMessage) SetFrameLength(v int32) {
-	binary.LittleEndian.PutUint32(msg.Buffer[FRAME_LENGTH_FIELD_OFFSET:VERSION_FIELD_OFFSET],uint32(v))
+	binary.LittleEndian.PutUint32(msg.Buffer[FRAME_LENGTH_FIELD_OFFSET:VERSION_FIELD_OFFSET], uint32(v))
 }
 
 func (msg *ClientMessage) SetVersion(v uint8) {
 	msg.Buffer[VERSION_FIELD_OFFSET] = byte(v)
 }
 
-func (msg *ClientMessage) GetFlags() uint8{
+func (msg *ClientMessage) GetFlags() uint8 {
 	return msg.Buffer[FLAGS_FIELD_OFFSET]
 }
 
@@ -126,6 +132,118 @@ func (msg *ClientMessage) SetDataOffset(v uint16) {
 	binary.LittleEndian.Uint16(msg.Buffer[DATA_OFFSET_FIELD_OFFSET:HEADER_SIZE])
 }
 
-func (msg *ClientMessage) SetIsRetryable(v bool) {
-	msg.IsRetryable = v
+func (msg *ClientMessage) writeOffset() int {
+	return msg.GetDataOffset() + msg.writeIndex
 }
+
+func (msg *ClientMessage) readOffset() int {
+	return msg.GetDataOffset() + msg.readIndex
+}
+
+/*
+	PAYLOAD
+ */
+
+func (msg *ClientMessage) AppendByte(v uint8) {
+	msg.Buffer[msg.writeOffset()] = byte(v)
+	msg.writeIndex += BYTE_SIZE_IN_BYTES
+}
+
+func (msg *ClientMessage) AppendInt(v int) {
+	binary.LittleEndian.PutUint32(msg.Buffer[msg.writeOffset() : msg.writeOffset() + INT_SIZE_IN_BYTES], uint32(v))
+	msg.writeIndex += INT_SIZE_IN_BYTES
+}
+
+func (msg *ClientMessage) AppendByteArray(arr []byte) {
+	length := len(arr)
+	//length
+	msg.AppendInt(length)
+	//copy content
+	msg.Buffer[msg.writeOffset() : msg.writeOffset() + length] = arr[:]
+	msg.writeIndex += length
+}
+
+func (msg *ClientMessage) AppendStr(str string) {
+	if utf8.Valid(str) {
+		msg.AppendByteArray([]byte(str))
+	}else {
+		//todo dynamic byte array? (look at the below comment)
+		buff := make([]byte, 0, len(str) * 3)
+		n := 0
+		for _, b := range str {
+			n += utf8.EncodeRune(buff[n:], rune(b))
+		}
+		//append fixed size slice
+		msg.AppendByteArray(buff[0:n])
+	}
+}
+
+func (msg *ClientMessage) AppendBool(v bool) {
+	if v {
+		msg.AppendByte(1)
+	}else {
+		msg.AppendByte(0)
+	}
+}
+
+/*
+	PAYLOAD READ
+ */
+
+func (msg *ClientMessage) readInt() int32{
+	int := int32(binary.LittleEndian.Uint32(msg.Buffer[msg.readOffset():msg.readOffset() + INT_SIZE_IN_BYTES]))
+	msg.readIndex += INT_SIZE_IN_BYTES
+	return int
+}
+
+func (msg *ClientMessage) readByte() uint8{
+	byte := byte(msg.Buffer[msg.readOffset()])
+	msg.readIndex += BYTE_SIZE_IN_BYTES
+	return byte
+}
+
+func (msg *ClientMessage) readBool() bool {
+	if msg.readByte() == 1 {
+		return true
+	}else {
+		return false
+	}
+}
+func (msg *ClientMessage) readString() string{
+	return string(msg.readByteArray())
+}
+
+func (msg *ClientMessage) readByteArray() {
+	length := msg.readInt()
+	result := msg.Buffer[msg.readOffset(): msg.readOffset() + length]
+	msg.readIndex += length
+	return result
+}
+
+/*
+	Helpers
+ */
+
+func (msg *ClientMessage) IsRetryable() bool{
+	return msg.isRetryable
+}
+
+func (msg *ClientMessage) SetIsRetryable(v bool) {
+	msg.isRetryable = v
+}
+
+func (msg *ClientMessage) UpdateFrameLength() {
+	msg.SetFrameLength(msg.writeOffset())
+}
+
+/*
+	Free methods
+ */
+
+func CalculateSizeStr(str string) int {
+	return len(str) + INT_SIZE_IN_BYTES
+}
+
+//func CalculateSizeData()
+
+//func CalculateSizeAddress()
