@@ -14,3 +14,4 @@ type Address struct {
 func (address Address) String() string {
 	return fmt.Sprintf("Address: host=%s, port=%d", address.Host, address.Port)
 }
+

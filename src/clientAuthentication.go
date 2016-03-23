@@ -8,37 +8,37 @@ const (
 
 type ResponseParameters struct {
 	Status byte
-	Address Address
-	Uuid string
-	OwnerUuid string
-	SerializationVersion int
+	Address *Address
+	Uuid *string
+	OwnerUuid *string
+	SerializationVersion uint8
 }
 
-func CalculateSize(username string, password string, uuid string, ownerUuid string, isOwnerConnection bool, clientType string, serializationVersion int) int {
+func CalculateSize(username string, password string, uuid *string, ownerUuid *string, isOwnerConnection bool, clientType string, serializationVersion uint8) int {
 	dataSize := 0
-	dataSize += CalculateSizeStr(username)
-	dataSize += CalculateSizeStr(password)
+	dataSize += CalculateSizeStr(&username)
+	dataSize += CalculateSizeStr(&password)
 	dataSize += BOOLEAN_SIZE_IN_BYTES
-	if uuid != nil{
+	if uuid != nil {
 		dataSize += CalculateSizeStr(uuid)
 	}
 	dataSize += BOOLEAN_SIZE_IN_BYTES
-	if ownerUuid != nil{
+	if ownerUuid != nil {
 		dataSize += CalculateSizeStr(ownerUuid)
 	}
 	dataSize += BOOLEAN_SIZE_IN_BYTES
-	dataSize += CalculateSizeStr(clientType)
+	dataSize += CalculateSizeStr(&clientType)
 	dataSize += BYTE_SIZE_IN_BYTES
 	return dataSize
 }
 
-func EncodeRequest(username string, password string, uuid string, ownerUuid string, isOwnerConnection bool, clientType string, serializationVersion uint8) ClientMessage{
+func EncodeRequest(username string, password string, uuid *string, ownerUuid *string, isOwnerConnection bool, clientType string, serializationVersion uint8) *ClientMessage{
 	payloadSize := CalculateSize(username, password, uuid, ownerUuid, isOwnerConnection, clientType, serializationVersion)
-	message := NewClientMessage(nil, payloadSize)
+	message := CreateForEncode(payloadSize)
 	message.SetMessageType(REQUEST_TYPE)
 	message.SetIsRetryable(RETRYABLE)
-	message.AppendStr(username)
-	message.AppendStr(password)
+	message.AppendStr(&username)
+	message.AppendStr(&password)
 	message.AppendBool(uuid == nil)
 	if uuid != nil{
 		message.AppendStr(uuid)
@@ -48,7 +48,7 @@ func EncodeRequest(username string, password string, uuid string, ownerUuid stri
 		message.AppendStr(ownerUuid)
 	}
 	message.AppendBool(isOwnerConnection)
-	message.AppendStr(clientType)
+	message.AppendStr(&clientType)
 	message.AppendByte(serializationVersion)
 	message.UpdateFrameLength()
 
@@ -56,13 +56,14 @@ func EncodeRequest(username string, password string, uuid string, ownerUuid stri
 }
 
 //todo toObject bool??
-func DecodeResponse(message ClientMessage) {
+func DecodeResponse(message ClientMessage) *ResponseParameters{
 	parameters := new(ResponseParameters)
+//	parameters := ResponseParameters{}
 	parameters.Status = message.readByte()
 	parameters.Address = nil
 	if !(message.readBool()) {
-		parameters.Address.Host = message.readString()
-		parameters.Address.Port = message.readInt()
+		parameters.Address.Host = *message.readString()
+		parameters.Address.Port = int(message.readInt())
 	}
 	parameters.Uuid = nil
 	if !(message.readBool()) {
@@ -73,6 +74,7 @@ func DecodeResponse(message ClientMessage) {
 		parameters.OwnerUuid = message.readString()
 	}
 	parameters.SerializationVersion = message.readByte()
+
 	return parameters
 }
 

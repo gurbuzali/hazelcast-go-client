@@ -1,5 +1,4 @@
 package src
-import "encoding/binary"
 
 const (
 	BYTE_SIZE_IN_BYTES = 1
@@ -31,25 +30,25 @@ const (
 
 //	BIG_ENDIAN = 2
 //	LITTLE_ENDIAN = 1
-	LITTLE_ENDIAN = binary.LittleEndian
-	BIG_ENDIAN = binary.BigEndian
-
-	NULL_ARRAY_LENGTH = -1
-
-	//Limits
-	MAX_BYTE = 127
-	MIN_BYTE = -128
-
-	MAX_SHORT = 2 * * 16 - 1
-	MIN_SHORT = -2 * * 15
-
-	MAX_INT = 2 * * 32 - 1
-	MIN_INT = -2 * * 31
-
-	MAX_LONG = 2 * * 64 - 1
-	MIN_LONG = -2 * * 63
-
-	MAX_FLOAT32 = 3.4028235e+38
-	MIN_FLOAT32 = 1.4e-45
+//	LITTLE_ENDIAN = binary.LittleEndian
+//	BIG_ENDIAN = binary.BigEndian
+//
+//	NULL_ARRAY_LENGTH = -1
+//
+//	//Limits
+//	MAX_BYTE = 127
+//	MIN_BYTE = -128
+//
+//	MAX_SHORT = 2 * * 16 - 1
+//	MIN_SHORT = -2 * * 15
+//
+//	MAX_INT = 2 * * 32 - 1
+//	MIN_INT = -2 * * 31
+//
+//	MAX_LONG = 2 * * 64 - 1
+//	MIN_LONG = -2 * * 63
+//
+//	MAX_FLOAT32 = 3.4028235e+38
+//	MIN_FLOAT32 = 1.4e-45
 
 )

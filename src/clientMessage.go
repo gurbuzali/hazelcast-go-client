@@ -55,29 +55,34 @@ type ClientMessage struct {
 	isRetryable bool
 }
 
-//Todo
-func NewClientMessage(buffer []byte, payloadSize int) *ClientMessage {
+/*
+	Client Message Constructors
+ */
+
+func CreateForDecode(buffer []byte) *ClientMessage {
 	msg := new(ClientMessage)
-	if buffer {
-		msg.Buffer = buffer
-		msg.readIndex = 0
-	}else {
-		buffer = make([]byte, HEADER_SIZE + payloadSize)
-		msg.SetDataOffset(HEADER_SIZE)
-		msg.writeIndex = 0
-		return &ClientMessage{buffer}
-	}
+	msg.Buffer = buffer
+	msg.readIndex = 0
 	msg.isRetryable = false
 
 	return msg
 }
 
+func CreateForEncode(payloadSize int) *ClientMessage {
+	msg := new(ClientMessage)
+	buffer := make([]byte, HEADER_SIZE + payloadSize)
+	msg.Buffer = buffer
+	msg.SetDataOffset(HEADER_SIZE)
+	msg.writeIndex = 0
+
+	return msg
+}
 /*
 	HEADER ACCESSORS
  */
 
 func (msg *ClientMessage) GetFrameLength() int32 {
-	return binary.LittleEndian.Uint32(msg.Buffer[FRAME_LENGTH_FIELD_OFFSET:VERSION_FIELD_OFFSET])
+	return int32(binary.LittleEndian.Uint32(msg.Buffer[FRAME_LENGTH_FIELD_OFFSET:VERSION_FIELD_OFFSET]))
 }
 
 func (msg *ClientMessage) SetFrameLength(v int32) {
@@ -133,11 +138,11 @@ func (msg *ClientMessage) SetDataOffset(v uint16) {
 }
 
 func (msg *ClientMessage) writeOffset() int {
-	return msg.GetDataOffset() + msg.writeIndex
+	return int(msg.GetDataOffset()) + msg.writeIndex
 }
 
 func (msg *ClientMessage) readOffset() int {
-	return msg.GetDataOffset() + msg.readIndex
+	return int(msg.GetDataOffset()) + msg.readIndex
 }
 
 /*
@@ -159,18 +164,18 @@ func (msg *ClientMessage) AppendByteArray(arr []byte) {
 	//length
 	msg.AppendInt(length)
 	//copy content
-	msg.Buffer[msg.writeOffset() : msg.writeOffset() + length] = arr[:]
+	copy(msg.Buffer[msg.writeOffset() : msg.writeOffset() + length], arr)
 	msg.writeIndex += length
 }
 
-func (msg *ClientMessage) AppendStr(str string) {
-	if utf8.Valid(str) {
-		msg.AppendByteArray([]byte(str))
+func (msg *ClientMessage) AppendStr(str *string) {
+	if utf8.ValidString(*str) {
+		msg.AppendByteArray([]byte(*str))
 	}else {
 		//todo dynamic byte array? (look at the below comment)
-		buff := make([]byte, 0, len(str) * 3)
+		buff := make([]byte, 0, len(*str) * 3)
 		n := 0
-		for _, b := range str {
+		for _, b := range *str {
 			n += utf8.EncodeRune(buff[n:], rune(b))
 		}
 		//append fixed size slice
@@ -190,13 +195,13 @@ func (msg *ClientMessage) AppendBool(v bool) {
 	PAYLOAD READ
  */
 
-func (msg *ClientMessage) readInt() int32{
+func (msg *ClientMessage) readInt() int32 {
 	int := int32(binary.LittleEndian.Uint32(msg.Buffer[msg.readOffset():msg.readOffset() + INT_SIZE_IN_BYTES]))
 	msg.readIndex += INT_SIZE_IN_BYTES
 	return int
 }
 
-func (msg *ClientMessage) readByte() uint8{
+func (msg *ClientMessage) readByte() uint8 {
 	byte := byte(msg.Buffer[msg.readOffset()])
 	msg.readIndex += BYTE_SIZE_IN_BYTES
 	return byte
@@ -209,14 +214,15 @@ func (msg *ClientMessage) readBool() bool {
 		return false
 	}
 }
-func (msg *ClientMessage) readString() string{
-	return string(msg.readByteArray())
+func (msg *ClientMessage) readString() *string {
+	str := string(msg.readByteArray())
+	return &str
 }
 
-func (msg *ClientMessage) readByteArray() {
+func (msg *ClientMessage) readByteArray() []byte {
 	length := msg.readInt()
-	result := msg.Buffer[msg.readOffset(): msg.readOffset() + length]
-	msg.readIndex += length
+	result := msg.Buffer[msg.readOffset(): msg.readOffset() + int(length)]
+	msg.readIndex += int(length)
 	return result
 }
 
@@ -224,7 +230,7 @@ func (msg *ClientMessage) readByteArray() {
 	Helpers
  */
 
-func (msg *ClientMessage) IsRetryable() bool{
+func (msg *ClientMessage) IsRetryable() bool {
 	return msg.isRetryable
 }
 
@@ -233,15 +239,15 @@ func (msg *ClientMessage) SetIsRetryable(v bool) {
 }
 
 func (msg *ClientMessage) UpdateFrameLength() {
-	msg.SetFrameLength(msg.writeOffset())
+	msg.SetFrameLength(int32(msg.writeOffset()))
 }
 
 /*
 	Free methods
  */
 
-func CalculateSizeStr(str string) int {
-	return len(str) + INT_SIZE_IN_BYTES
+func CalculateSizeStr(str *string) int {
+	return len(*str) + INT_SIZE_IN_BYTES
 }
 
 //func CalculateSizeData()
