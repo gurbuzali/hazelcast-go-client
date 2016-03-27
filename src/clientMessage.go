@@ -62,7 +62,8 @@ type ClientMessage struct {
 func CreateForDecode(buffer []byte) *ClientMessage {
 	msg := new(ClientMessage)
 	msg.Buffer = buffer
-	msg.readIndex = 0
+//	msg.readIndex = HEADER_SIZE
+//	msg.SetDataOffset(uint16(HEADER_SIZE))
 	msg.isRetryable = false
 
 	return msg
@@ -72,8 +73,10 @@ func CreateForEncode(payloadSize int) *ClientMessage {
 	msg := new(ClientMessage)
 	buffer := make([]byte, HEADER_SIZE + payloadSize)
 	msg.Buffer = buffer
-	msg.SetDataOffset(HEADER_SIZE)
-	msg.writeIndex = 0
+	msg.SetDataOffset(uint16(HEADER_SIZE))
+	msg.writeIndex = HEADER_SIZE
+	msg.SetFrameLength(int32(HEADER_SIZE)) //?
+	msg.isRetryable = false
 
 	return msg
 }
@@ -110,7 +113,7 @@ func (msg *ClientMessage) GetMessageType() uint16 {
 }
 
 func (msg *ClientMessage) SetMessageType(v uint16) {
-	binary.LittleEndian.PutUint16(msg.Buffer, v)
+	binary.LittleEndian.PutUint16(msg.Buffer[TYPE_FIELD_OFFSET:CORRELATION_ID_FIELD_OFFSET], v)
 }
 
 func (msg *ClientMessage) GetCorrelationId() int64 {
@@ -134,7 +137,7 @@ func (msg *ClientMessage) GetDataOffset() uint16 {
 }
 
 func (msg *ClientMessage) SetDataOffset(v uint16) {
-	binary.LittleEndian.Uint16(msg.Buffer[DATA_OFFSET_FIELD_OFFSET:HEADER_SIZE])
+	binary.LittleEndian.PutUint16(msg.Buffer[DATA_OFFSET_FIELD_OFFSET:HEADER_SIZE], v)
 }
 
 func (msg *ClientMessage) writeOffset() int {
@@ -150,12 +153,12 @@ func (msg *ClientMessage) readOffset() int {
  */
 
 func (msg *ClientMessage) AppendByte(v uint8) {
-	msg.Buffer[msg.writeOffset()] = byte(v)
+	msg.Buffer[msg.writeIndex] = byte(v)
 	msg.writeIndex += BYTE_SIZE_IN_BYTES
 }
 
 func (msg *ClientMessage) AppendInt(v int) {
-	binary.LittleEndian.PutUint32(msg.Buffer[msg.writeOffset() : msg.writeOffset() + INT_SIZE_IN_BYTES], uint32(v))
+	binary.LittleEndian.PutUint32(msg.Buffer[msg.writeIndex : msg.writeIndex + INT_SIZE_IN_BYTES], uint32(v))
 	msg.writeIndex += INT_SIZE_IN_BYTES
 }
 
@@ -164,7 +167,7 @@ func (msg *ClientMessage) AppendByteArray(arr []byte) {
 	//length
 	msg.AppendInt(length)
 	//copy content
-	copy(msg.Buffer[msg.writeOffset() : msg.writeOffset() + length], arr)
+	copy(msg.Buffer[msg.writeIndex : msg.writeIndex + length], arr)
 	msg.writeIndex += length
 }
 
@@ -239,7 +242,7 @@ func (msg *ClientMessage) SetIsRetryable(v bool) {
 }
 
 func (msg *ClientMessage) UpdateFrameLength() {
-	msg.SetFrameLength(int32(msg.writeOffset()))
+	msg.SetFrameLength(int32(msg.writeIndex))
 }
 
 /*

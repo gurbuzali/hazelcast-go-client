@@ -56,18 +56,20 @@ func EncodeRequest(username string, password string, uuid *string, ownerUuid *st
 }
 
 //todo toObject bool??
-func DecodeResponse(message ClientMessage) *ResponseParameters{
+func DecodeResponse(message *ClientMessage) *ResponseParameters{
 	parameters := new(ResponseParameters)
 //	parameters := ResponseParameters{}
 	parameters.Status = message.readByte()
 	parameters.Address = nil
 	if !(message.readBool()) {
+		parameters.Address = new(Address)
 		parameters.Address.Host = *message.readString()
 		parameters.Address.Port = int(message.readInt())
 	}
 	parameters.Uuid = nil
 	if !(message.readBool()) {
-		parameters.Uuid = message.readString()
+		uuid := message.readString()
+		parameters.Uuid = uuid
 	}
 	parameters.OwnerUuid = nil
 	if !(message.readBool()) {
