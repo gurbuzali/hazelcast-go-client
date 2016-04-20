@@ -2,41 +2,58 @@ package src
 import (
 	"net"
 	"fmt"
+	"bufio"
+	"errors"
+	"strconv"
+	"encoding/binary"
 )
 
 type ClientConnection struct {
-	address Address //TCPAddress
-	socket net.Conn //TCPConnection
-
-	lastRead int
+	address Address  //TCPAddress
+	socket  net.Conn //TCPConnection
 	readBuffer []byte
 }
 
+func NewClientConnection(address Address) *ClientConnection {
+	connection := new(ClientConnection)
+	connection.address = address
+	connection.readBuffer = make([]byte,0) //todo
+	return connection
+}
 
-func (connection *ClientConnection) Connect() {
-	buffer := make([]byte,3)
-	buffer = []byte(CLIENT_BINARY_NEW)
+func (this *ClientConnection) Connect(address Address) *Promise {
+	result := new(Promise)
 
-	connection.socket, _ = net.Dial("tcp", "127.0.0.1:5701")
-	fmt.Println(connection.socket.RemoteAddr())
-//	connection.socket, _ = net.Dial("tcp",connection.address.Host + ":" + connection.address.Port)
-	connection.socket.Write(buffer)
-	request := EncodeRequest("dev", "dev-pass", nil, nil, true, "GO", 1)
-	request.SetCorrelationId(0)
-	request.SetPartitionId(-1)
-	request.SetFlags(BEGIN_END_FLAG)
-	connection.socket.Write(request.Buffer)
+	result.SuccessChannel = make(chan interface{}, 1)
+	result.FailureChannel = make(chan error, 1)
 
-	rBuffer := make([]byte, 360)
+	go func() {
+		socket, err := net.Dial("tcp", this.address.Host + ":" + strconv.Itoa(this.address.Port))
+		this.socket = socket
+		if err == nil {
+			this.socket.Write([]byte(CLIENT_BINARY_NEW))
+			result.SuccessChannel <- this
+		} else {
+			result.FailureChannel <- errors.New("Could not connect to address" + this.address.String())
+			fmt.Println(err)
+		}
+	}()
 
-	readBytes , _ := connection.socket.Read(rBuffer)
-//	readBytes, err := bufio.NewReader(connection.socket).Read(connection.readBuffer)
-	fmt.Println(readBytes)
-	message := CreateForDecode(rBuffer[0:readBytes])
+	return result
+}
 
-	response := DecodeResponse(message)
-
-	fmt.Println(response.Address)
-	fmt.Println(response.Uuid)
-	fmt.Println(response.OwnerUuid)
+func (this *ClientConnection) registerResponseCallback(callback func([]byte)) {
+	rBuffer := make([]byte, 1024) //todo dynamic
+	this.socket.Read(rBuffer)
+	this.readBuffer = append(this.readBuffer,rBuffer)
+	for ;this.readBuffer >= INT_SIZE_IN_BYTES; {
+		frameLength := binary.LittleEndian.Uint32(this.readBuffer[0:])
+		if frameLength > len(this.readBuffer) {
+			return
+		}
+		message := make([]byte,frameLength)
+		copy(message,this.readBuffer[0:frameLength])
+		this.readBuffer = this.readBuffer[frameLength:]
+		callback(message)
+	}
 }
